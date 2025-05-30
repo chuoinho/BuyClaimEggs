@@ -58,7 +58,7 @@
     const updateLog = (message) => {
         config.latestLog = message;
         const logDisplay = document.getElementById("logDisplay");
-        if (logDisplay) logDisplay.textContent = `📜 Log: ${message}`;
+        if (logDisplay) logDisplay.textContent = `📜Log: ${message}`;
     };
 
     const runScript = async () => {
@@ -67,10 +67,10 @@
 
         for (let i = 0; i < config.total; i++) {
             await fetchAPI("buy-fancy-egg", { cat_category: config.buy_cat, quantity: 1 });
-            updateLog(`🥚 Đã mua "${config.buy_cat}"`);
+            updateLog('Đã mua "${config.buy_cat}"`);
             await delay(config.buyDelay);
             let data = await fetchAPI("claim-tao");
-            updateLog(`✅ Đã xoa ${i + 1}/${config.total} lần trứng: +${data.claim?.zen_claimed || 0} ZEN`);
+            updateLog(`Đã xoa ${i + 1}/${config.total} trứng: +${data.claim?.zen_claimed || 0} ZEN`);
 
             await delay(config.claimDelay);
         }
@@ -82,12 +82,10 @@
         const div = document.createElement("div");
         Object.assign(div.style, {
             position: "fixed", bottom: "20px", right: "20px",
-            overflow: "hidden",
-            background: "#ffffff", padding: "5px", border: "1px solid #ccc",
-            zIndex: "1000", borderRadius: "5px", boxShadow: "0 0 5px rgba(0,0,0,0.1)",
-            display: "flex", flexDirection: "column", gap: "8px",
-            Width: "245px",
-            Height: "245px"
+            background: "#ffffff", padding: "5px", border: "10px solid #ccc",
+            zIndex: "1000", borderRadius: "8px", boxShadow: "0 0 5px rgba(0,0,0,0.1)",
+            display: "flex", flexDirection: "column", gap: "3px",
+            width: "245px", height: "200px", overflow: "hidden"
         });
 
         const fragment = document.createDocumentFragment();
@@ -145,7 +143,7 @@
         const logDisplay = document.createElement("div");
         logDisplay.id = "logDisplay";
         logDisplay.textContent = "📜 Log: Chưa có hoạt động";
-        Object.assign(logDisplay.style, { fontSize: "8px", fontStyle: "italic", color: "#555" });
+        Object.assign(logDisplay.style, { fontSize: "9px", fontStyle: "italic", color: "#555" });
 
         fragment.append(selectWrapper, totalWrapper, buyDelayWrapper, claimDelayWrapper, button, logDisplay);
         div.appendChild(fragment);
