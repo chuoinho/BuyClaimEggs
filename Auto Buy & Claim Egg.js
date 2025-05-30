@@ -82,9 +82,12 @@
         const div = document.createElement("div");
         Object.assign(div.style, {
             position: "fixed", bottom: "20px", right: "20px",
-            background: "#ffffff", padding: "10px", border: "1px solid #ccc",
-            zIndex: "1000", borderRadius: "5px", boxShadow: "0 0 10px rgba(0,0,0,0.1)",
-            display: "flex", flexDirection: "column", gap: "8px"
+            overflow: "hidden",
+            background: "#ffffff", padding: "5px", border: "1px solid #ccc",
+            zIndex: "1000", borderRadius: "5px", boxShadow: "0 0 5px rgba(0,0,0,0.1)",
+            display: "flex", flexDirection: "column", gap: "8px",
+            Width: "245px",
+            Height: "245px"
         });
 
         const fragment = document.createDocumentFragment();
@@ -94,7 +97,7 @@
             Object.assign(wrapper.style, { display: "flex", justifyContent: "space-between", alignItems: "center" });
 
             const label = Object.assign(document.createElement("label"), { textContent: labelText });
-            Object.assign(label.style, { fontSize: "14px", fontWeight: "bold", marginRight: "8px" });
+            Object.assign(label.style, { fontSize: "12px", fontWeight: "bold", marginRight: "8px" });
 
             const input = Object.assign(document.createElement("input"), { type: "number", value: defaultValue, min: 0 });
             Object.assign(input.style, { width: "60px", textAlign: "center" });
@@ -107,8 +110,8 @@
         const selectWrapper = document.createElement("div");
         Object.assign(selectWrapper.style, { display: "flex", justifyContent: "space-between", alignItems: "center" });
 
-        const selectLabel = Object.assign(document.createElement("label"), { textContent: "🔹 Chọn loại mèo:" });
-        Object.assign(selectLabel.style, { fontSize: "14px", fontWeight: "bold", marginRight: "8px" });
+        const selectLabel = Object.assign(document.createElement("label"), { textContent: "Chọn mèo:" });
+        Object.assign(selectLabel.style, { fontSize: "12px", fontWeight: "bold", marginRight: "8px" });
 
         const select = document.createElement("select");
         config.catList.forEach(cat => {
@@ -142,7 +145,7 @@
         const logDisplay = document.createElement("div");
         logDisplay.id = "logDisplay";
         logDisplay.textContent = "📜 Log: Chưa có hoạt động";
-        Object.assign(logDisplay.style, { fontSize: "12px", fontStyle: "italic", marginTop: "8px", color: "#555" });
+        Object.assign(logDisplay.style, { fontSize: "8px", fontStyle: "italic", color: "#555" });
 
         fragment.append(selectWrapper, totalWrapper, buyDelayWrapper, claimDelayWrapper, button, logDisplay);
         div.appendChild(fragment);
