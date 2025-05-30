@@ -17,7 +17,7 @@
         buy_cat: 'page',
         total: 3,
         buyDelay: 2,
-        claimDelay: 3,
+        claimDelay: 2,
         apiBaseUrl: "https://zenegg-api.production.cryptokitties.dapperlabs.com/egg/api/den/",
         token: Telegram.WebView.initParams.tgWebAppData,
         errorLog: [],
@@ -66,14 +66,12 @@
         updateLog("Script bắt đầu chạy...");
 
         for (let i = 0; i < config.total; i++) {
+            await delay(config.buyDelay);
             await fetchAPI("buy-fancy-egg", { cat_category: config.buy_cat, quantity: 1 });
             updateLog(`🥚 Đã mua "${config.buy_cat}"`);
-
-            await delay(config.buyDelay);
+            await delay(config.claimDelay);
             let data = await fetchAPI("claim-tao");
             updateLog(`✅ Xóa trứng: +${data.claim?.zen_claimed || 0} ZEN`);
-
-            await delay(config.claimDelay);
             updateLog(`🔄 Đã xóa ${i + 1}/${config.total} lần trứng`);
         }
 
@@ -122,7 +120,7 @@
 
         // Các ô nhập số
         const { wrapper: totalWrapper, input: inputTotal } = createLabelInput("Số lần mua:", config.total);
-        const { wrapper: buyDelayWrapper, input: inputBuyDelay } = createLabelInput("Chờ mua (giây):", config.buyDelay);
+        const { wrapper: buyDelayWrapper, input: inputBuyDelay } = createLabelInput("Chờ mua tiếp (giây):", config.buyDelay);
         const { wrapper: claimDelayWrapper, input: inputClaimDelay } = createLabelInput("Chờ xóa (giây):", config.claimDelay);
 
         // Nút chạy script
