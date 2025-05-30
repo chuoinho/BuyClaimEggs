@@ -14,8 +14,8 @@
 
     ///// SETTING /////
     const config = {
-        catList: ['page', 'berry', 'pages_gang', 'hybrid', 'wild_west', 'frosty_fam', 'footballer', 'the_purrfessionals'], // Danh sách mèo có sẵn
-        buy_cat: 'footballer',
+        catList: ['page', 'berry', 'pages_gang', 'hybrid', 'wild_west', 'frosty_fam', 'footballer', 'the_purrfessionals', 'slumber_party'], // Danh sách mèo có sẵn
+        buy_cat: 'page',
         total: 3,
         buyDelay: 2,  // Thời gian chờ trước khi mua trứng (giây)
         claimDelay: 3, // Thời gian chờ trước khi xóa trứng (giây)
