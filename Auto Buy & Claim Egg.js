@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Auto Buy & Claim Egg (V1.0)
+// @name         Auto Buy & Claim Egg (V1.1 by Boo)
 // @namespace    http://tampermonkey.net/
-// @version      1.6
-// @description  Thêm tiêu đề cho các mục thời gian chờ mua, chờ xóa và số lần mua trứng
+// @version      1.1
+// @description  Bổ sung log, update mèo
 // @author       Anh
 // @match        *://*.cryptokitties.dapperlabs.com/*
 // @grant        GM_xmlhttpRequest
@@ -12,168 +12,142 @@
 (function() {
     'use strict';
 
-    ///// SETTING /////
     const config = {
-        catList: ['page', 'berry', 'pages_gang', 'hybrid', 'wild_west', 'frosty_fam', 'footballer', 'the_purrfessionals', 'slumber_party'], // Danh sách mèo có sẵn
+        catList: ['page', 'berry', 'pages_gang', 'hybrid', 'wild_west', 'frosty_fam', 'footballer', 'the_purrfessionals', 'slumber_party', 'crossbreed'],
         buy_cat: 'page',
         total: 3,
-        buyDelay: 2,  // Thời gian chờ trước khi mua trứng (giây)
-        claimDelay: 3, // Thời gian chờ trước khi xóa trứng (giây)
-        errorLog: [],
+        buyDelay: 2,
+        claimDelay: 3,
         apiBaseUrl: "https://zenegg-api.production.cryptokitties.dapperlabs.com/egg/api/den/",
-        token: Telegram.WebView.initParams.tgWebAppData
+        token: Telegram.WebView.initParams.tgWebAppData,
+        errorLog: [],
+        latestLog: '' // Biến chứa log gần nhất
     };
 
-    // Hàm gửi yêu cầu API bằng Tampermonkey
-    const fetchAPI = (endpoint, body = {}, callback) => {
-        GM_xmlhttpRequest({
-            method: "POST",
-            url: `${config.apiBaseUrl}${endpoint}`,
-            headers: {
-                "Accept": "*/*",
-                "Content-Type": "application/json",
-                "X-ID-Token": config.token,
-                "X-App-Version": new Date().toISOString().replace(/[-:.TZ]/g, '')
-            },
-            data: JSON.stringify(body),
-            onload: response => {
-                let data = JSON.parse(response.responseText);
-                if (response.status !== 200) {
-                    console.error(`❌ Lỗi API: ${data.error || "Không rõ nguyên nhân"}`);
-                    config.errorLog.push({ time: new Date().toISOString(), type: endpoint, message: data.error || "Không rõ nguyên nhân" });
+    const fetchAPI = async (endpoint, body = {}) => {
+        return new Promise(resolve => {
+            GM_xmlhttpRequest({
+                method: "POST",
+                url: `${config.apiBaseUrl}${endpoint}`,
+                headers: {
+                    "Accept": "*/*",
+                    "Content-Type": "application/json",
+                    "X-ID-Token": config.token,
+                    "X-App-Version": new Date().toISOString().replace(/[-:.TZ]/g, '')
+                },
+                data: JSON.stringify(body),
+                onload: response => {
+                    let data = JSON.parse(response.responseText);
+                    if (response.status !== 200) {
+                        console.error(`❌ API Error: ${data.error || "Unknown error"}`);
+                        config.errorLog.push({ time: new Date().toISOString(), type: endpoint, message: data.error || "Unknown error" });
+                    }
+                    resolve(data);
+                },
+                onerror: error => {
+                    console.error(`🚨 API Error ${endpoint}:`, error);
+                    config.errorLog.push({ time: new Date().toISOString(), type: endpoint, message: error.message });
+                    resolve({});
                 }
-                callback(data);
-            },
-            onerror: error => {
-                console.error(`🚨 Lỗi khi gọi API ${endpoint}:`, error);
-                config.errorLog.push({ time: new Date().toISOString(), type: endpoint, message: error.message });
-                callback({});
-            }
+            });
         });
     };
 
-    // Hàm chờ
     const delay = t => new Promise(resolve => setTimeout(resolve, t * 1000));
 
-    // Hàm chính để thực hiện mua và xóa trứng
-    const runScript = async (buy_cat, total, buyDelay, claimDelay) => {
-        console.log(`🚀 Bắt đầu chạy script! Mua mèo: "${buy_cat}", Số lần mua: ${total}, Chờ sau mua: ${buyDelay}s, Chờ sau xóa: ${claimDelay}s`);
-
-        for (let i = 0; i < total; i++) {
-            await new Promise(resolve => fetchAPI("buy-fancy-egg", { cat_category: buy_cat, quantity: 1 }, resolve));
-            console.log(`🥚 Mua trứng "${buy_cat}" thành công`);
-
-            await delay(buyDelay);
-            await new Promise(resolve => fetchAPI("claim-tao", {}, data => {
-                console.log(`🥚 Xóa trứng thành công: +${data.claim?.zen_claimed || 0} ZEN`);
-                resolve();
-            }));
-
-            await delay(claimDelay);
-            console.log(`😉 Đã xóa: ${i + 1}/${total} lần trứng🥚.`);
-        }
-
-        console.log("✅ DONE ALL");
-
-        if (config.errorLog.length) {
-            console.warn("⚠️ Danh sách lỗi:", config.errorLog);
-        } else {
-            console.log("✅ Không có lỗi!");
-        }
+    const updateLog = (message) => {
+        config.latestLog = message;
+        const logDisplay = document.getElementById("logDisplay");
+        if (logDisplay) logDisplay.textContent = `📜 Log: ${message}`;
     };
 
-    // Thêm giao diện chọn mèo gọn gàng với tiêu đề
+    const runScript = async () => {
+        console.log(`🚀 Running script! Buying cat: "${config.buy_cat}", Total: ${config.total}, Buy delay: ${config.buyDelay}s, Claim delay: ${config.claimDelay}s`);
+        updateLog("Script bắt đầu chạy...");
+
+        for (let i = 0; i < config.total; i++) {
+            await fetchAPI("buy-fancy-egg", { cat_category: config.buy_cat, quantity: 1 });
+            updateLog(`🥚 Đã mua "${config.buy_cat}"`);
+
+            await delay(config.buyDelay);
+            let data = await fetchAPI("claim-tao");
+            updateLog(`✅ Xóa trứng: +${data.claim?.zen_claimed || 0} ZEN`);
+
+            await delay(config.claimDelay);
+            updateLog(`🔄 Đã xóa ${i + 1}/${config.total} lần trứng`);
+        }
+
+        updateLog("✅ Hoàn thành!");
+    };
+
     const createUI = () => {
         const div = document.createElement("div");
-        div.style.position = "fixed";
-        div.style.bottom = "20px";
-        div.style.right = "20px";
-        div.style.background = "#ffffff";
-        div.style.padding = "10px";
-        div.style.border = "1px solid #ccc";
-        div.style.zIndex = "1000";
-        div.style.borderRadius = "5px";
-        div.style.boxShadow = "0 0 10px rgba(0,0,0,0.1)";
-        div.style.display = "flex";
-        div.style.flexDirection = "column";
-        div.style.gap = "8px";
+        Object.assign(div.style, {
+            position: "fixed", bottom: "20px", right: "20px",
+            background: "#ffffff", padding: "10px", border: "1px solid #ccc",
+            zIndex: "1000", borderRadius: "5px", boxShadow: "0 0 10px rgba(0,0,0,0.1)",
+            display: "flex", flexDirection: "column", gap: "8px"
+        });
 
-        const createLabelInput = (labelText, inputType, defaultValue) => {
+        const fragment = document.createDocumentFragment();
+
+        const createLabelInput = (labelText, defaultValue) => {
             const wrapper = document.createElement("div");
-            wrapper.style.display = "flex";
-            wrapper.style.alignItems = "center";
-            wrapper.style.justifyContent = "space-between";
+            Object.assign(wrapper.style, { display: "flex", justifyContent: "space-between", alignItems: "center" });
 
+            const label = Object.assign(document.createElement("label"), { textContent: labelText });
+            Object.assign(label.style, { fontSize: "14px", fontWeight: "bold", marginRight: "8px" });
 
-            const label = document.createElement("label");
-            label.textContent = labelText;
-            label.style.fontSize = "14px";
-            label.style.fontWeight = "bold";
-            label.style.marginRight = "8px";
+            const input = Object.assign(document.createElement("input"), { type: "number", value: defaultValue, min: 0 });
+            Object.assign(input.style, { width: "60px", textAlign: "center" });
 
-            const input = document.createElement("input");
-            input.type = inputType;
-            input.value = defaultValue;
-            input.min = 0;
-            input.style.width = "60px"; // Để ô nhập không chiếm quá nhiều không gian
-            input.style.textAlign = "center";
-
-            wrapper.appendChild(label);
-            wrapper.appendChild(input);
+            wrapper.append(label, input);
             return { wrapper, input };
         };
 
         // Danh sách chọn mèo
         const selectWrapper = document.createElement("div");
-        selectWrapper.style.display = "flex";
-        selectWrapper.style.alignItems = "center";
-        selectWrapper.style.justifyContent = "space-between";
+        Object.assign(selectWrapper.style, { display: "flex", justifyContent: "space-between", alignItems: "center" });
 
-        const selectLabel = document.createElement("label");
-        selectLabel.textContent = "🔹 Chọn loại mèo:";
-        selectLabel.style.fontSize = "14px";
-        selectLabel.style.fontWeight = "bold";
-        selectLabel.style.marginRight = "8px";
-
+        const selectLabel = Object.assign(document.createElement("label"), { textContent: "🔹 Chọn loại mèo:" });
+        Object.assign(selectLabel.style, { fontSize: "14px", fontWeight: "bold", marginRight: "8px" });
 
         const select = document.createElement("select");
         config.catList.forEach(cat => {
-            const option = document.createElement("option");
-            option.value = cat;
-            option.textContent = cat.charAt(0).toUpperCase() + cat.slice(1);
+            const option = Object.assign(document.createElement("option"), { value: cat, textContent: cat.charAt(0).toUpperCase() + cat.slice(1) });
             select.appendChild(option);
         });
 
-        selectWrapper.appendChild(selectLabel);
-        selectWrapper.appendChild(select);
+        selectWrapper.append(selectLabel, select);
 
-        const { wrapper: totalWrapper, input: inputTotal } = createLabelInput("Số lần mua:", "number", config.total);
-        const { wrapper: buyDelayWrapper, input: inputBuyDelay } = createLabelInput("Chờ xoa trứng (giây):", "number", config.buyDelay);
-        const { wrapper: claimDelayWrapper, input: inputClaimDelay } = createLabelInput("Chờ mua tiếp (giây):", "number", config.claimDelay);
+        // Các ô nhập số
+        const { wrapper: totalWrapper, input: inputTotal } = createLabelInput("Số lần mua:", config.total);
+        const { wrapper: buyDelayWrapper, input: inputBuyDelay } = createLabelInput("Chờ mua (giây):", config.buyDelay);
+        const { wrapper: claimDelayWrapper, input: inputClaimDelay } = createLabelInput("Chờ xóa (giây):", config.claimDelay);
 
         // Nút chạy script
-    const button = document.createElement("button");
-    button.innerHTML = "🚀 Chạy";
-    button.style.background = "#28a745";
-    button.style.color = "white";
-    button.style.border = "none";
-    button.style.cursor = "pointer";
-    button.style.fontSize = "12px";
-    button.style.padding = "4px 8px";
-    button.style.borderRadius = "5px";
-    button.style.boxShadow = "0 2px 4px rgba(0,0,0,0.2)";
-    button.style.transition = "0.2s";
-
-    // Hiệu ứng hover
-    button.onmouseover = () => button.style.background = "#218838";
-    button.onmouseleave = () => button.style.background = "#28a745";
-
+        const button = Object.assign(document.createElement("button"), { innerHTML: "🚀 Chạy" });
+        Object.assign(button.style, {
+            background: "#28a745", color: "white", border: "none", cursor: "pointer",
+            fontSize: "12px", padding: "4px 8px", borderRadius: "5px", boxShadow: "0 2px 4px rgba(0,0,0,0.2)", transition: "0.2s"
+        });
 
         button.onclick = () => {
-            runScript(select.value, parseInt(inputTotal.value), parseInt(inputBuyDelay.value), parseInt(inputClaimDelay.value));
+            config.buy_cat = select.value;
+            config.total = parseInt(inputTotal.value);
+            config.buyDelay = parseInt(inputBuyDelay.value);
+            config.claimDelay = parseInt(inputClaimDelay.value);
+            runScript();
         };
 
-        div.append(selectLabel, select, totalWrapper, buyDelayWrapper, claimDelayWrapper, button);
+        // Hiển thị log gần nhất
+        const logDisplay = document.createElement("div");
+        logDisplay.id = "logDisplay";
+        logDisplay.textContent = "📜 Log: Chưa có hoạt động";
+        Object.assign(logDisplay.style, { fontSize: "12px", fontStyle: "italic", marginTop: "8px", color: "#555" });
+
+        fragment.append(selectWrapper, totalWrapper, buyDelayWrapper, claimDelayWrapper, button, logDisplay);
+        div.appendChild(fragment);
         document.body.appendChild(div);
     };
 
