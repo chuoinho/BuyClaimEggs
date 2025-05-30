@@ -13,7 +13,7 @@
     'use strict';
 
     const config = {
-        catList: ['page', 'berry', 'pages_gang', 'hybrid', 'wild_west', 'frosty_fam', 'footballer', 'the_purrfessionals', 'slumber_party', 'crossbreed'],
+        catList: ['page', 'berry', 'pages_gang', 'hybrid', 'wild_west', 'frosty_fam', 'footballer', 'the_purrfessionals', 'slumber_party', 'crossbreed', 'golden'],
         buy_cat: 'page',
         total: 3,
         buyDelay: 2,
@@ -71,6 +71,7 @@
             await delay(config.buyDelay);
             let data = await fetchAPI("claim-tao");
             updateLog(`✅ Đã xoa ${i + 1}/${config.total} lần trứng: +${data.claim?.zen_claimed || 0} ZEN`);
+
             await delay(config.claimDelay);
         }
 
