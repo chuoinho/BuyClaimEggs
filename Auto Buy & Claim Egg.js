@@ -66,13 +66,12 @@
         updateLog("Script bắt đầu chạy...");
 
         for (let i = 0; i < config.total; i++) {
-            await delay(config.buyDelay);
             await fetchAPI("buy-fancy-egg", { cat_category: config.buy_cat, quantity: 1 });
             updateLog(`🥚 Đã mua "${config.buy_cat}"`);
-            await delay(config.claimDelay);
+            await delay(config.buyDelay);
             let data = await fetchAPI("claim-tao");
-            updateLog(`✅ Xóa trứng: +${data.claim?.zen_claimed || 0} ZEN`);
-            updateLog(`🔄 Đã xóa ${i + 1}/${config.total} lần trứng`);
+            updateLog(`✅ Đã xoa ${i + 1}/${config.total} lần trứng: +${data.claim?.zen_claimed || 0} ZEN`);
+            await delay(config.claimDelay);
         }
 
         updateLog("✅ Hoàn thành!");
@@ -120,8 +119,8 @@
 
         // Các ô nhập số
         const { wrapper: totalWrapper, input: inputTotal } = createLabelInput("Số lần mua:", config.total);
-        const { wrapper: buyDelayWrapper, input: inputBuyDelay } = createLabelInput("Chờ mua tiếp (giây):", config.buyDelay);
-        const { wrapper: claimDelayWrapper, input: inputClaimDelay } = createLabelInput("Chờ xóa (giây):", config.claimDelay);
+        const { wrapper: buyDelayWrapper, input: inputBuyDelay } = createLabelInput("Chờ xoa (giây):", config.buyDelay);
+        const { wrapper: claimDelayWrapper, input: inputClaimDelay } = createLabelInput("Chờ mua tiếp (giây):", config.claimDelay);
 
         // Nút chạy script
         const button = Object.assign(document.createElement("button"), { innerHTML: "🚀 Chạy" });
