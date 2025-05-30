@@ -1,9 +1,8 @@
-# BuynClaimEggs
-All The Zen -auto buy & claim eggs 
+# All The Zen -auto buy & claim eggs 
 
 🛠 Chức năng chính
 - Tự động mua trứng.
-- Tự động xóa trứng.
+- Tự động xoa trứng.
 - Tùy chỉnh mèo muốn mua, số lần mua, thời gian chờ.
 
 Hướng dẫn sử dụng script Tampermonkey này
@@ -19,14 +18,15 @@ Trước tiên, bạn cần cài đặt Tampermonkey trên trình duyệt:
 Bạn có thể điều chỉnh các thông số sau trong giao diện hiển thị:
 - 🐱 Nhập tên mèo: Nhập tên mèo bạn muốn mua (ví dụ: footballer, ninja…).
 - 🔢 Số lần mua: Nhập số lượng trứng cần mua.
-- ⏱️ Chờ sau mua (giây): Điều chỉnh thời gian chờ trước khi tiếp tục.
-- ⏳ Chờ sau xóa (giây): Đặt thời gian chờ trước khi xóa trứng.
+- ⏱️ Chờ xoa trứng (giây): Đặt thời gian chờ trước khi xoa trứng.
+- ⏳ Chờ mua tiếp (giây): Điều chỉnh thời gian chờ trước khi tiếp tục mua mèo.
 ▶️ 4. Sử dụng script
 - Truy cập https://web.telegram.org/k/#@CKMeowBot, mở app, chuột phải chọn inspect, tìm thẻ iframe copy link mở = tab mới.
 - Tìm phần giao diện script hiển thị ở góc dưới phải màn hình.
 - Nhập thông tin cần thiết.
 - Bấm 🚀 Chạy để bắt đầu tự động mua và xóa trứng.
+- Lần đầu chạy tampermonkey sẽ yêu cầu xác thực, chọn allow all hoặc allow domain là được.
 ✅ 5. Kiểm tra kết quả
-- Script sẽ tự động chạy và hiển thị log trên console (F12 > Console).
-- Nếu có lỗi, script sẽ lưu lại danh sách lỗi để người dùng kiểm tra.
+- Script sẽ tự động chạy và hiển thị log.
+- Nếu có lỗi, script sẽ lưu lại danh sách lỗi để người dùng kiểm tra trên console (F12 > Console).
 
