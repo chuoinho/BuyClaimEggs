@@ -17,7 +17,10 @@
             'page', 'berry', 'pages_gang', 'hybrid',
             'wild_west', 'frosty_fam', 'footballer',
             'the_purrfessionals', 'slumber_party',
-            'crossbreed', 'golden'
+            'crossbreed', 'golden', 'band', 'bands_mascot',
+            'kaiju', 'plugged_in',
+            'ascended_page', 'ascended_pages_gang', 'ascended_hybrid', 'ascended_frosty_fam',
+            'ascended_footballer','ascended_slumber_party', 'ascended_the_purrfessionals'
         ],
         buy_cat: 'page',
         total: 3,
