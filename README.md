@@ -1,12 +1,10 @@
 # All The Zen -auto buy & claim eggs 
-
 🛠 Chức năng chính
 - Tự động mua trứng.
 - Tự động xoa trứng.
 - Tùy chỉnh mèo muốn mua, số lần mua, thời gian chờ.
 
 Hướng dẫn sử dụng script Tampermonkey này
-
 🚀 1. Cài đặt Tampermonkey
 Trước tiên, bạn cần cài đặt Tampermonkey trên trình duyệt:
 - Nếu chưa có, hãy tải tiện ích Tampermonkey tại Chrome Web Store hoặc tìm trên Firefox Add-ons.
@@ -29,8 +27,8 @@ Bạn có thể điều chỉnh các thông số sau trong giao diện hiển th
 - Tìm phần giao diện script hiển thị ở góc dưới phải màn hình.
 - Nhập thông tin cần thiết.
 - Bấm 🚀 Chạy để bắt đầu tự động mua và xóa trứng.
-  
 - Lần đầu chạy tampermonkey sẽ yêu cầu xác thực, chọn allow all hoặc allow domain là được.
+  
 ✅ 5. Kiểm tra kết quả
 - Script sẽ tự động chạy và hiển thị log.
 - Nếu có lỗi, script sẽ lưu lại danh sách lỗi để người dùng kiểm tra trên console (F12 > Console).
