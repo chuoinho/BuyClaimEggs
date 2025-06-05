@@ -12,6 +12,7 @@
 (function() {
     'use strict';
 
+    // Cấu hình chung
     const config = {
         catList: [
             'page', 'berry', 'pages_gang', 'hybrid',
@@ -19,8 +20,8 @@
             'the_purrfessionals', 'slumber_party',
             'crossbreed', 'golden', 'band', 'bands_mascot',
             'kaiju', 'plugged_in',
-            'ascended_page', 'ascended_pages_gang', 'ascended_hybrid', 'ascended_frosty_fam',
-            'ascended_footballer','ascended_slumber_party', 'ascended_the_purrfessionals'
+            'ascended_page', 'ascended_pages_gang', 'ascended_hybrid', 'ascended_frosty_fam', 'ascended_wild_west',
+            'ascended_footballer', 'ascended_slumber_party', 'ascended_the_purrfessionals', 'ascended_band'
         ],
         buy_cat: 'page',
         total: 3,
@@ -33,7 +34,12 @@
         isRunning: false
     };
 
-    // Hàm gửi yêu cầu API POST, sử dụng GM_xmlhttpRequest để xử lý CORS
+    // Hàm áp dụng style cho element
+    const applyStyles = (element, styles) => {
+        Object.assign(element.style, styles);
+    };
+
+    // Hàm gửi yêu cầu API POST sử dụng GM_xmlhttpRequest (để vượt qua CORS)
     const fetchAPI = async (endpoint, body = {}) => {
         return new Promise(resolve => {
             GM_xmlhttpRequest({
@@ -82,10 +88,10 @@
         });
     };
 
-    // Hàm tạo độ trễ tính theo giây
+    // Hàm tạo độ trễ (tính bằng giây)
     const delay = seconds => new Promise(resolve => setTimeout(resolve, seconds * 1000));
 
-    // Hàm cập nhật hiển thị log trên giao diện
+    // Hàm cập nhật log trên giao diện
     const updateLog = message => {
         config.latestLog = message;
         const logDisplay = document.getElementById("logDisplay");
@@ -94,7 +100,7 @@
         }
     };
 
-    // Hàm xử lý quy trình mua và xoa trứng
+    // Hàm xử lý quy trình mua và xóa trứng
     const runScript = async () => {
         config.isRunning = true;
         console.log(`🚀 Running script! Buying cat: "${config.buy_cat}", Total: ${config.total}, Buy delay: ${config.buyDelay}s, Claim delay: ${config.claimDelay}s`);
@@ -116,10 +122,10 @@
                 return;
             }
 
-            // xoa trứng và nhận thưởng
+            // Xóa trứng và nhận thưởng
             const data = await fetchAPI("claim-tao");
             const claimed = data.claim?.zen_claimed || 0;
-            updateLog(`✅ Đã xoa ${i + 1}/${config.total} lần trứng: +${claimed} ZEN`);
+            updateLog(`✅ Đã xóa ${i + 1}/${config.total} lần trứng: +${claimed} ZEN`);
             await delay(config.claimDelay);
         }
 
@@ -127,24 +133,20 @@
         config.isRunning = false;
     };
 
-    // Hàm tạo field nhập liệu với label
+    // Hàm tạo một trường nhập liệu với label
     const createLabelInput = (labelText, defaultValue) => {
         const wrapper = document.createElement("div");
-        wrapper.style.display = "flex";
-        wrapper.style.justifyContent = "space-between";
-        wrapper.style.alignItems = "center";
+        applyStyles(wrapper, { display: "flex", justifyContent: "space-between", alignItems: "center" });
 
         const label = document.createElement("label");
         label.textContent = labelText;
-        label.style.fontSize = "13px";
-        label.style.fontWeight = "bold";
-        label.style.marginRight = "8px";
+        applyStyles(label, { fontSize: "13px", fontWeight: "bold", marginRight: "8px" });
 
         const input = document.createElement("input");
         input.type = "number";
         input.value = defaultValue;
         input.min = 1;
-        Object.assign(input.style, {
+        applyStyles(input, {
             width: "50px",
             textAlign: "center",
             padding: "3px",
@@ -157,47 +159,74 @@
         return { wrapper, input };
     };
 
-    // Hàm tạo giao diện cho script
+    // Hàm tạo giao diện cho script với tính năng kéo thả và thu gọn/mở rộng
     const createUI = () => {
+        // Container chính
         const container = document.createElement("div");
-        Object.assign(container.style, {
+        applyStyles(container, {
             position: "fixed",
             bottom: "20px",
             right: "20px",
             background: "#ffffff",
-            padding: "10px",
+            padding: "0",
             border: "1px solid #ccc",
             zIndex: "1000",
             borderRadius: "5px",
             boxShadow: "0 0 10px rgba(0,0,0,0.1)",
+            width: "220px"
+        });
+
+        // Header chứa tiêu đề và nút thu gọn/mở rộng
+        const header = document.createElement("div");
+        header.textContent = "Auto Buy & Claim Egg";
+        applyStyles(header, {
+            background: "#28a745",
+            color: "white",
+            padding: "8px",
+            cursor: "move",
+            borderTopLeftRadius: "5px",
+            borderTopRightRadius: "5px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            fontSize: "14px"
+        });
+
+        // Nút thu gọn/mở rộng
+        const toggleCollapseButton = document.createElement("button");
+        toggleCollapseButton.textContent = "−";
+        applyStyles(toggleCollapseButton, {
+            background: "transparent",
+            border: "none",
+            color: "white",
+            fontSize: "16px",
+            cursor: "pointer",
+            lineHeight: "1"
+        });
+        header.appendChild(toggleCollapseButton);
+
+        // Khối nội dung chứa các thành phần bên dưới header
+        const content = document.createElement("div");
+        applyStyles(content, {
+            padding: "10px",
             display: "flex",
             flexDirection: "column",
-            width: "200px",
-            height: "230px",
             gap: "5px",
             overflow: "hidden"
         });
 
-        const fragment = document.createDocumentFragment();
-
         // Dropdown chọn loại mèo
         const selectWrapper = document.createElement("div");
-        Object.assign(selectWrapper.style, {
+        applyStyles(selectWrapper, {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center"
         });
-
         const selectLabel = document.createElement("label");
         selectLabel.textContent = "Chọn mèo:";
-        Object.assign(selectLabel.style, {
-            fontSize: "13px",
-            fontWeight: "bold",
-            marginRight: "4px"
-        });
-
+        applyStyles(selectLabel, { fontSize: "13px", fontWeight: "bold", marginRight: "4px" });
         const select = document.createElement("select");
-        Object.assign(select.style, {
+        applyStyles(select, {
             width: "90px",
             padding: "4px",
             border: "1px solid #ccc",
@@ -217,10 +246,10 @@
         const { wrapper: buyDelayWrapper, input: inputBuyDelay } = createLabelInput("Chờ xoa (giây):", config.buyDelay);
         const { wrapper: claimDelayWrapper, input: inputClaimDelay } = createLabelInput("Chờ mua tiếp (giây):", config.claimDelay);
 
-        // Nút chạy/dừng hợp nhất
+        // Nút chạy/dừng
         const toggleButton = document.createElement("button");
         toggleButton.innerHTML = "🚀 Chạy";
-        Object.assign(toggleButton.style, {
+        applyStyles(toggleButton, {
             background: "#28a745",
             color: "white",
             border: "none",
@@ -231,17 +260,13 @@
             boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
             transition: "0.2s"
         });
-
-        // Xử lý khi nút được nhấn
         toggleButton.onclick = async () => {
             if (config.isRunning) {
-                // Nếu đã chạy, nhấn sẽ dừng lại
                 config.isRunning = false;
                 updateLog("Đang dừng script...");
                 toggleButton.innerHTML = "🚀 Chạy";
                 console.log("Script dừng theo yêu cầu của người dùng.");
             } else {
-                // Nếu chưa chạy, cập nhật cấu hình rồi chạy script
                 config.buy_cat = select.value;
                 config.total = parseInt(inputTotal.value, 10);
                 config.buyDelay = parseInt(inputBuyDelay.value, 10);
@@ -256,15 +281,52 @@
         const logDisplay = document.createElement("div");
         logDisplay.id = "logDisplay";
         logDisplay.textContent = "Log: Chưa có hoạt động";
-        Object.assign(logDisplay.style, {
+        applyStyles(logDisplay, {
             fontSize: "9px",
             fontStyle: "italic",
             color: "#555"
         });
 
-        fragment.append(selectWrapper, totalWrapper, buyDelayWrapper, claimDelayWrapper, toggleButton, logDisplay);
-        container.appendChild(fragment);
+        // Lắp ráp các thành phần
+        content.append(selectWrapper, totalWrapper, buyDelayWrapper, claimDelayWrapper, toggleButton, logDisplay);
+        container.append(header, content);
         document.body.appendChild(container);
+
+        // --- Xử lý kéo thả: ---
+        header.addEventListener("mousedown", e => {
+            e.preventDefault();
+            const rect = container.getBoundingClientRect();
+            // Chuyển sang vị trí left/top
+            container.style.left = `${rect.left}px`;
+            container.style.top = `${rect.top}px`;
+            container.style.bottom = "auto";
+            container.style.right = "auto";
+
+            const shiftX = e.clientX - rect.left;
+            const shiftY = e.clientY - rect.top;
+
+            const moveAt = (pageX, pageY) => {
+                container.style.left = (pageX - shiftX) + "px";
+                container.style.top = (pageY - shiftY) + "px";
+            };
+
+            const onMouseMove = event => moveAt(event.pageX, event.pageY);
+            document.addEventListener("mousemove", onMouseMove);
+
+            document.addEventListener("mouseup", function onMouseUp() {
+                document.removeEventListener("mousemove", onMouseMove);
+                document.removeEventListener("mouseup", onMouseUp);
+            });
+        });
+
+        // --- Thu gọn/mở rộng giao diện ---
+        let isCollapsed = false;
+        toggleCollapseButton.addEventListener("click", e => {
+            e.stopPropagation();
+            isCollapsed = !isCollapsed;
+            content.style.display = isCollapsed ? "none" : "flex";
+            toggleCollapseButton.textContent = isCollapsed ? "+" : "−";
+        });
     };
 
     window.addEventListener("load", createUI);
