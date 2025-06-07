@@ -1,10 +1,13 @@
 # All The Zen -auto buy & claim eggs 
 🛠 Chức năng chính
-- Tự động mua trứng.
+- Tự động mua mèo.
 - Tự động xoa trứng.
 - Tùy chỉnh mèo muốn mua, số lần mua, thời gian chờ.
-
+- Tự động claim trứng to, xoa trứng to, nhận mèo ninja.
+  
+----------------------------------------------------------------------
 Hướng dẫn sử dụng script Tampermonkey này
+
 🚀 1. Cài đặt Tampermonkey
 Trước tiên, bạn cần cài đặt Tampermonkey trên trình duyệt:
 - Nếu chưa có, hãy tải tiện ích Tampermonkey tại Chrome Web Store hoặc tìm trên Firefox Add-ons.
