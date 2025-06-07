@@ -1,333 +1,312 @@
 // ==UserScript==
-// @name         Auto Buy & Claim Egg (by Boo)
+// @name         Auto Buy & Claim Egg
 // @namespace    http://tampermonkey.net/
-// @version      1.2
-// @description  Mua mèo tự động, xoa trứng.
-// @author       Anh
+// @version      1.3
+// @description  Tự động mua mèo, claim trứng to, claim mèo Ninja, hiện log các kiểu rất chuyên nghiệp.
+// @author       Boo
 // @match        *://*.cryptokitties.dapperlabs.com/*
 // @grant        GM_xmlhttpRequest
 // @run-at       document-end
 // ==/UserScript==
 
-(function() {
-    'use strict';
+(function () {
+  "use strict";
 
-    // Cấu hình chung
-    const config = {
-        catList: [
-            'page', 'berry', 'pages_gang', 'hybrid',
-            'wild_west', 'frosty_fam', 'footballer',
-            'the_purrfessionals', 'slumber_party',
-            'crossbreed', 'golden', 'band', 'bands_mascot',
-            'kaiju', 'plugged_in',
-            'ascended_page', 'ascended_pages_gang', 'ascended_hybrid', 'ascended_frosty_fam', 'ascended_wild_west',
-            'ascended_footballer', 'ascended_slumber_party', 'ascended_the_purrfessionals', 'ascended_band'
-        ],
-        buy_cat: 'page',
-        total: 3,
-        buyDelay: 2,
-        claimDelay: 2,
-        apiBaseUrl: "https://zenegg-api.production.cryptokitties.dapperlabs.com/egg/api/den/",
-        token: Telegram.WebView.initParams.tgWebAppData,
-        errorLog: [],
-        latestLog: '',
-        isRunning: false
+  // ------ CONFIG ------
+  const config = {
+    buy_cat: "page",
+    total: 3,
+    buyDelay: 2,    // Delay giữa các lần mua (giây)
+    claimDelay: 2,  // Delay giữa các lần claim (giây)
+    apiBase: "https://zenegg-api.production.cryptokitties.dapperlabs.com/egg/api/den",
+    token: Telegram.WebView.initParams.tgWebAppData,
+    isRunning: false,           // Script mua trứng đang chạy
+    isBigEggAutoActive: false   // BEA đã được kích hoạt hay chưa
+  };
+
+  // ------ GLOBAL VARIABLES cho BEA ------
+  let bigEggAutoInterval = null;
+  let fancyClaimed = false;     // Đánh dấu đã claim Fancy trong chu kỳ hiện tại hay chưa
+
+  // ------ LOG STATE & FUNCTIONS ------
+  const logState = { cat: "", BEA: "" };
+  const refreshLog = () => {
+    const L = document.getElementById("logDisplay");
+    if (L) {
+      L.textContent = "📜 Log: " + (config.isRunning ? logState.cat : logState.BEA);
+    }
+  };
+  const updateCatLog = msg => { logState.cat = msg; if (config.isRunning) refreshLog(); };
+  const updateBEALog = msg => { if (!config.isRunning) { logState.BEA = msg; refreshLog(); } };
+
+  // ------ UTILS ------
+  const setStyle = (el, s) => Object.assign(el.style, s);
+  const delay = s => new Promise(r => setTimeout(r, s * 1000));
+  const pad = n => String(n).padStart(2, "0");
+  const formatDuration = sec => {
+    sec = Math.max(0, Math.ceil(sec));
+    return `${pad(Math.floor(sec / 3600))}:${pad(Math.floor((sec % 3600) / 60))}:${pad(sec % 60)}`;
+  };
+
+  // --- TẠO INPUT CÓ NHÃN ---
+  function createLabelInput(labelText, defaultValue) {
+    const wrapper = document.createElement("div");
+    setStyle(wrapper, {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      width: "100%"
+    });
+    const label = document.createElement("label");
+    label.textContent = labelText;
+    setStyle(label, { fontSize: "13px", fontWeight: "bold" });
+    const input = document.createElement("input");
+    input.type = "number";
+    input.value = defaultValue;
+    input.min = 1;
+    setStyle(input, {
+      width: "50px",
+      textAlign: "center",
+      padding: "3px",
+      border: "1px solid #ccc",
+      borderRadius: "3px",
+      background: "#f9f9f9"
+    });
+    wrapper.append(label, input);
+    return { wrapper, input };
+  }
+
+  // ------ GM_xmlhttpRequest Utility ------
+  const gmRequest = (method, url, data = null) =>
+    new Promise(resolve => {
+      GM_xmlhttpRequest({
+        method,
+        url,
+        headers: {
+          Accept: "*/*",
+          "Content-Type": "application/json",
+          "X-ID-Token": config.token,
+          "X-App-Version": new Date().toISOString().replace(/[-:.TZ]/g, "")
+        },
+        data: data ? JSON.stringify(data) : null,
+        onload: res => {
+          try { resolve(JSON.parse(res.responseText)); }
+          catch (e) { console.error(e); resolve({}); }
+        },
+        onerror: err => { console.error(err); resolve({}); }
+      });
+    });
+
+  // ------ API FUNCTIONS ------
+  const fetchAPI = (endpoint, body = {}) => gmRequest("POST", `${config.apiBase}/${endpoint}`, body);
+  const fetchGameInfo = () => gmRequest("GET", config.apiBase);
+  const getNextPetMs = game => {
+    const raw = game?.zen_den?.regenesis_egg_status?.next_pet_timestamp;
+    if (!raw) { console.error("Missing next_pet_timestamp"); return 0; }
+    return (typeof raw === "string" && raw.includes("T"))
+      ? (Date.parse(raw) || 0)
+      : (Number(raw) < 1e12 ? Number(raw) * 1000 : Number(raw));
+  };
+  const buyBigEgg = () => gmRequest("POST", `${config.apiBase}/gently-stroke-the-regenesis-egg`);
+  const claimZenModeTaoAPI = () => gmRequest("POST", `${config.apiBase}/claim-zen-mode-tao`);
+  const claimFancyParadeKitty = kittyId =>
+    gmRequest("POST", `${config.apiBase}/claim-fancy-parade-kitty`, { fancy_parade_kitty_claim_id: kittyId });
+  const claimFancyParadeKitties = async () => {
+    const game = await fetchGameInfo();
+    const paradeKitties = game?.zen_den?.claimable_fancy_parade_kitties || [];
+    for (const kitty of paradeKitties)
+      if (kitty?.id) { await claimFancyParadeKitty(kitty.id); await delay(3); }
+  };
+
+  async function runScript() {
+    config.isRunning = true;
+    updateCatLog("Script mua trứng bắt đầu chạy…");
+    for (let i = 0; i < config.total; i++) {
+      if (!config.isRunning) return updateCatLog("☹ Script mua trứng đã dừng.");
+      await fetchAPI("buy-fancy-egg", { cat_category: config.buy_cat, quantity: 1 });
+      updateCatLog(`🥚 Đã mua ${i + 1}/${config.total}`);
+      await delay(config.buyDelay);
+      if (!config.isRunning) return updateCatLog("☹ Script mua trứng đã dừng.");
+      const data = await fetchAPI("claim-tao");
+      const claimed = data.claim?.zen_claimed || 0;
+      updateCatLog(`✅ Đã claim ${i + 1}/${config.total}: +${claimed} ZEN`);
+      await delay(config.claimDelay);
+    }
+    updateCatLog("✅ Script mua trứng đã hoàn thành!");
+    config.isRunning = false;
+  }
+
+  // ------ Big Egg Auto CONTROL ------
+  function startBigEggAuto() {
+    bigEggAutoInterval = setInterval(async () => {
+      const game = await fetchGameInfo();
+      if (!game) { if (!config.isRunning) updateBEALog("BEA: ⚠️ Không lấy được game info"); return; }
+      const nextMs = getNextPetMs(game);
+      const diffSec = (nextMs - Date.now()) / 1000;
+      if (diffSec > 0) {
+        if (diffSec <= 600 && !fancyClaimed) { await claimFancyParadeKitties(); fancyClaimed = true; }
+        if (!config.isRunning) updateBEALog(`BEA: Chưa đến hạn: còn ${formatDuration(diffSec)}`);
+      } else {
+        if (!config.isRunning) updateBEALog("BEA: Đến hạn, tự claim Big Egg…");
+        try {
+          await buyBigEgg();
+          await delay(1); // Delay 1 giây
+          await claimZenModeTaoAPI();
+          fancyClaimed = false;
+        } catch (e) { console.error("[buyBigEgg error]", e); }
+      }
+    }, 1000);
+  }
+  function stopBigEggAuto() {
+    if (bigEggAutoInterval) { clearInterval(bigEggAutoInterval); bigEggAutoInterval = null; }
+  }
+
+  // ------ UI CREATION ------
+  async function createUI() {
+    const eggShopData = (await gmRequest("GET", config.apiBase)).zen_den?.egg_shop || [];
+    let cats = [...new Set(eggShopData.map(e => e.cat_category))];
+    if (!cats.length) cats = ["page"];
+    config.buy_cat = cats[0];
+
+    const container = document.createElement("div");
+    setStyle(container, {
+      position: "fixed",
+      left: "20px",
+      width: "240px",
+      background: "#fff",
+      border: "1px solid #ccc",
+      borderRadius: "5px",
+      boxShadow: "0 0 10px rgba(0,0,0,0.1)",
+      zIndex: "1000"
+    });
+    const header = document.createElement("div");
+    setStyle(header, {
+      background: "#28a745",
+      color: "#fff",
+      padding: "8px",
+      cursor: "move",
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      borderTopLeftRadius: "5px",
+      borderTopRightRadius: "5px"
+    });
+    header.textContent = "Auto Buy & Claim Eggs";
+    const minBtn = document.createElement("button");
+    minBtn.textContent = "🔽";
+    setStyle(minBtn, { background: "transparent", border: "none", color: "#fff", cursor: "pointer" });
+    header.appendChild(minBtn);
+
+    const content = document.createElement("div");
+    setStyle(content, { display: "flex", flexDirection: "column", gap: "5px", padding: "5px" });
+
+    const selWrap = document.createElement("div");
+    setStyle(selWrap, { display: "flex", alignItems:"center" });
+    const selLabel = document.createElement("label");
+    selLabel.textContent = "Chọn mèo:";
+    setStyle(selLabel, { fontSize: "13px", fontWeight: "bold", marginRight: "4px" });
+    const select = document.createElement("select");
+    setStyle(select, { width: "110px", padding: "4px", border: "1px solid #ccc", borderRadius: "3px" });
+    cats.forEach(cat => {
+      const opt = document.createElement("option");
+      opt.value = cat;
+      opt.textContent = cat.charAt(0).toUpperCase() + cat.slice(1);
+      select.appendChild(opt);
+    });
+    const refreshBtn = document.createElement("button");
+    refreshBtn.innerHTML = "🔄";
+    refreshBtn.title = "Làm mới danh sách";
+    setStyle(refreshBtn, { color: "#fff", border: "none", cursor: "pointer", fontSize: "12px", padding: "4px 6px", borderRadius: "3px", marginLeft: "8px" });
+    refreshBtn.onclick = async () => {
+      updateCatLog("Đang làm mới danh sách mèo...");
+      const newGameInfo = await fetchGameInfo();
+      let newCats = (newGameInfo?.zen_den?.egg_shop || []).map(e => e.cat_category);
+      newCats = [...new Set(newCats)];
+      if (!newCats.length) return updateCatLog("⚠️ Làm mới thất bại");
+      select.innerHTML = "";
+      newCats.forEach(cat => {
+        const opt = document.createElement("option");
+        opt.value = cat;
+        opt.textContent = cat.charAt(0).toUpperCase() + cat.slice(1);
+        select.appendChild(opt);
+      });
+      config.buy_cat = newCats[0];
+      updateCatLog("✅ Đã làm mới danh sách!");
     };
+    selWrap.append(selLabel, select, refreshBtn);
 
-    // Hàm áp dụng style cho element
-    const applyStyles = (element, styles) => {
-        Object.assign(element.style, styles);
-    };
+    const input1 = createLabelInput("Số lần mua:", config.total);
+    const input2 = createLabelInput("Chờ mua (s):", config.buyDelay);
+    const input3 = createLabelInput("Chờ claim (s):", config.claimDelay);
+    const cfgCol = document.createElement("div");
+    setStyle(cfgCol, { display: "flex", flexDirection: "column", gap: "5px" });
+    cfgCol.append(input1.wrapper, input2.wrapper, input3.wrapper);
 
-    // Hàm gửi yêu cầu API POST sử dụng GM_xmlhttpRequest (để vượt qua CORS)
-    const fetchAPI = async (endpoint, body = {}) => {
-        return new Promise(resolve => {
-            GM_xmlhttpRequest({
-                method: "POST",
-                url: `${config.apiBaseUrl}${endpoint}`,
-                headers: {
-                    "Accept": "*/*",
-                    "Content-Type": "application/json",
-                    "X-ID-Token": config.token,
-                    "X-App-Version": new Date().toISOString().replace(/[-:.TZ]/g, '')
-                },
-                data: JSON.stringify(body),
-                onload: response => {
-                    let data;
-                    try {
-                        data = JSON.parse(response.responseText);
-                    } catch (e) {
-                        console.error('Parsing error:', e);
-                        config.errorLog.push({
-                            time: new Date().toISOString(),
-                            type: endpoint,
-                            message: e.message
-                        });
-                        return resolve({});
-                    }
-                    if (response.status !== 200) {
-                        console.error(`❌ API Error at ${endpoint}: ${data.error || "Unknown error"}`);
-                        config.errorLog.push({
-                            time: new Date().toISOString(),
-                            type: endpoint,
-                            message: data.error || "Unknown error"
-                        });
-                    }
-                    resolve(data);
-                },
-                onerror: error => {
-                    console.error(`🚨 API Error at ${endpoint}:`, error);
-                    config.errorLog.push({
-                        time: new Date().toISOString(),
-                        type: endpoint,
-                        message: error.message
-                    });
-                    resolve({});
-                }
-            });
-        });
-    };
-
-    // Hàm tạo độ trễ (tính bằng giây)
-    const delay = seconds => new Promise(resolve => setTimeout(resolve, seconds * 1000));
-
-    // Hàm cập nhật log trên giao diện
-    const updateLog = message => {
-        config.latestLog = message;
-        const logDisplay = document.getElementById("logDisplay");
-        if (logDisplay) {
-            logDisplay.textContent = `📜 Log: ${message}`;
-        }
-    };
-
-    // Hàm xử lý quy trình mua và xóa trứng
-    const runScript = async () => {
-        config.isRunning = true;
-        console.log(`🚀 Running script! Buying cat: "${config.buy_cat}", Total: ${config.total}, Buy delay: ${config.buyDelay}s, Claim delay: ${config.claimDelay}s`);
-        updateLog("Script bắt đầu chạy...");
-
-        for (let i = 0; i < config.total; i++) {
-            if (!config.isRunning) {
-                updateLog("☹ Script đã bị dừng.");
-                return;
-            }
-
-            // Mua trứng
-            await fetchAPI("buy-fancy-egg", { cat_category: config.buy_cat, quantity: 1 });
-            updateLog(`🥚 Đã mua ${i + 1}/${config.total} trứng`);
-            await delay(config.buyDelay);
-
-            if (!config.isRunning) {
-                updateLog("☹ Script đã bị dừng.");
-                return;
-            }
-
-            // Xóa trứng và nhận thưởng
-            const data = await fetchAPI("claim-tao");
-            const claimed = data.claim?.zen_claimed || 0;
-            updateLog(`✅ Đã xóa ${i + 1}/${config.total} lần trứng: +${claimed} ZEN`);
-            await delay(config.claimDelay);
-        }
-
-        updateLog("✅ Hoàn thành!");
+    const toggleBtn = document.createElement("button");
+    toggleBtn.innerHTML = "🚀 Chạy";
+    setStyle(toggleBtn, { background: "#28a745", color: "#fff", border: "none", cursor: "pointer", padding: "4px 8px", borderRadius: "5px" });
+    toggleBtn.onclick = async () => {
+      if (config.isRunning) {
         config.isRunning = false;
+        updateCatLog("Đang dừng script mua trứng...");
+        toggleBtn.innerHTML = "🚀 Chạy";
+      } else {
+        config.buy_cat = select.value;
+        config.total = parseInt(input1.input.value, 10);
+        config.buyDelay = parseInt(input2.input.value, 10);
+        config.claimDelay = parseInt(input3.input.value, 10);
+        toggleBtn.innerHTML = "⏹ Dừng";
+        await runScript();
+        toggleBtn.innerHTML = "🚀 Chạy";
+      }
     };
 
-    // Hàm tạo một trường nhập liệu với label
-    const createLabelInput = (labelText, defaultValue) => {
-        const wrapper = document.createElement("div");
-        applyStyles(wrapper, { display: "flex", justifyContent: "space-between", alignItems: "center" });
-
-        const label = document.createElement("label");
-        label.textContent = labelText;
-        applyStyles(label, { fontSize: "13px", fontWeight: "bold", marginRight: "8px" });
-
-        const input = document.createElement("input");
-        input.type = "number";
-        input.value = defaultValue;
-        input.min = 1;
-        applyStyles(input, {
-            width: "50px",
-            textAlign: "center",
-            padding: "3px",
-            border: "1px solid #ccc",
-            borderRadius: "3px",
-            background: "#f9f9f9"
-        });
-
-        wrapper.append(label, input);
-        return { wrapper, input };
+    const bigEggBtn = document.createElement("button");
+    bigEggBtn.innerHTML = "🐣 Big Egg Auto";
+    setStyle(bigEggBtn, { background: "#ff8c00", color: "#fff", border: "none", cursor: "pointer", padding: "4px 8px", borderRadius: "5px" });
+    bigEggBtn.onclick = async () => {
+      if (!config.isBigEggAutoActive) {
+        config.isBigEggAutoActive = true;
+        fancyClaimed = false;
+        bigEggBtn.innerHTML = "⏹ Big Egg Auto";
+        updateBEALog("BEA: Auto bật…");
+        startBigEggAuto();
+      } else {
+        config.isBigEggAutoActive = false;
+        stopBigEggAuto();
+        bigEggBtn.innerHTML = "🐣 Big Egg Auto";
+        updateBEALog("BEA: Auto tắt.");
+      }
     };
 
-    // Hàm tạo giao diện cho script với tính năng kéo thả và thu gọn/mở rộng
-    const createUI = () => {
-        // Container chính
-        const container = document.createElement("div");
-        applyStyles(container, {
-            position: "fixed",
-            bottom: "20px",
-            right: "20px",
-            background: "#ffffff",
-            padding: "0",
-            border: "1px solid #ccc",
-            zIndex: "1000",
-            borderRadius: "5px",
-            boxShadow: "0 0 10px rgba(0,0,0,0.1)",
-            width: "220px"
-        });
+    const logDisplay = document.createElement("div");
+    logDisplay.id = "logDisplay";
+    logDisplay.textContent = "📜 Log: Chưa có hoạt động";
+    setStyle(logDisplay, { fontSize: "9px", fontStyle: "italic", color: "#555" });
 
-        // Header chứa tiêu đề và nút thu gọn/mở rộng
-        const header = document.createElement("div");
-        header.textContent = "Auto Buy & Claim Egg";
-        applyStyles(header, {
-            background: "#28a745",
-            color: "white",
-            padding: "8px",
-            cursor: "move",
-            borderTopLeftRadius: "5px",
-            borderTopRightRadius: "5px",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            fontSize: "14px"
-        });
+    content.append(selWrap, cfgCol, toggleBtn, bigEggBtn, logDisplay);
+    const ui = document.createElement("div");
+    ui.append(header, content);
+    container.append(ui);
+    document.body.append(container);
+    container.style.top = window.innerHeight - container.offsetHeight - 20 + "px";
+    container.style.left = "20px";
+    makeDraggable(container);
 
-        // Nút thu gọn/mở rộng
-        const toggleCollapseButton = document.createElement("button");
-        toggleCollapseButton.textContent = "−";
-        applyStyles(toggleCollapseButton, {
-            background: "transparent",
-            border: "none",
-            color: "white",
-            fontSize: "16px",
-            cursor: "pointer",
-            lineHeight: "1"
-        });
-        header.appendChild(toggleCollapseButton);
-
-        // Khối nội dung chứa các thành phần bên dưới header
-        const content = document.createElement("div");
-        applyStyles(content, {
-            padding: "10px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "5px",
-            overflow: "hidden"
-        });
-
-        // Dropdown chọn loại mèo
-        const selectWrapper = document.createElement("div");
-        applyStyles(selectWrapper, {
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center"
-        });
-        const selectLabel = document.createElement("label");
-        selectLabel.textContent = "Chọn mèo:";
-        applyStyles(selectLabel, { fontSize: "13px", fontWeight: "bold", marginRight: "4px" });
-        const select = document.createElement("select");
-        applyStyles(select, {
-            width: "90px",
-            padding: "4px",
-            border: "1px solid #ccc",
-            borderRadius: "3px",
-            textAlign: "center"
-        });
-        config.catList.forEach(cat => {
-            const option = document.createElement("option");
-            option.value = cat;
-            option.textContent = cat.charAt(0).toUpperCase() + cat.slice(1);
-            select.appendChild(option);
-        });
-        selectWrapper.append(selectLabel, select);
-
-        // Các input cấu hình
-        const { wrapper: totalWrapper, input: inputTotal } = createLabelInput("Số lần mua:", config.total);
-        const { wrapper: buyDelayWrapper, input: inputBuyDelay } = createLabelInput("Chờ xoa (giây):", config.buyDelay);
-        const { wrapper: claimDelayWrapper, input: inputClaimDelay } = createLabelInput("Chờ mua tiếp (giây):", config.claimDelay);
-
-        // Nút chạy/dừng
-        const toggleButton = document.createElement("button");
-        toggleButton.innerHTML = "🚀 Chạy";
-        applyStyles(toggleButton, {
-            background: "#28a745",
-            color: "white",
-            border: "none",
-            cursor: "pointer",
-            fontSize: "12px",
-            padding: "4px 8px",
-            borderRadius: "5px",
-            boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
-            transition: "0.2s"
-        });
-        toggleButton.onclick = async () => {
-            if (config.isRunning) {
-                config.isRunning = false;
-                updateLog("Đang dừng script...");
-                toggleButton.innerHTML = "🚀 Chạy";
-                console.log("Script dừng theo yêu cầu của người dùng.");
-            } else {
-                config.buy_cat = select.value;
-                config.total = parseInt(inputTotal.value, 10);
-                config.buyDelay = parseInt(inputBuyDelay.value, 10);
-                config.claimDelay = parseInt(inputClaimDelay.value, 10);
-                toggleButton.innerHTML = "⏹ Dừng";
-                await runScript();
-                toggleButton.innerHTML = "🚀 Chạy";
-            }
-        };
-
-        // Phần hiển thị log
-        const logDisplay = document.createElement("div");
-        logDisplay.id = "logDisplay";
-        logDisplay.textContent = "Log: Chưa có hoạt động";
-        applyStyles(logDisplay, {
-            fontSize: "9px",
-            fontStyle: "italic",
-            color: "#555"
-        });
-
-        // Lắp ráp các thành phần
-        content.append(selectWrapper, totalWrapper, buyDelayWrapper, claimDelayWrapper, toggleButton, logDisplay);
-        container.append(header, content);
-        document.body.appendChild(container);
-
-        // --- Xử lý kéo thả: ---
-        header.addEventListener("mousedown", e => {
-            e.preventDefault();
-            const rect = container.getBoundingClientRect();
-            // Chuyển sang vị trí left/top
-            container.style.left = `${rect.left}px`;
-            container.style.top = `${rect.top}px`;
-            container.style.bottom = "auto";
-            container.style.right = "auto";
-
-            const shiftX = e.clientX - rect.left;
-            const shiftY = e.clientY - rect.top;
-
-            const moveAt = (pageX, pageY) => {
-                container.style.left = (pageX - shiftX) + "px";
-                container.style.top = (pageY - shiftY) + "px";
-            };
-
-            const onMouseMove = event => moveAt(event.pageX, event.pageY);
-            document.addEventListener("mousemove", onMouseMove);
-
-            document.addEventListener("mouseup", function onMouseUp() {
-                document.removeEventListener("mousemove", onMouseMove);
-                document.removeEventListener("mouseup", onMouseUp);
-            });
-        });
-
-        // --- Thu gọn/mở rộng giao diện ---
-        let isCollapsed = false;
-        toggleCollapseButton.addEventListener("click", e => {
-            e.stopPropagation();
-            isCollapsed = !isCollapsed;
-            content.style.display = isCollapsed ? "none" : "flex";
-            toggleCollapseButton.textContent = isCollapsed ? "+" : "−";
-        });
+    let minimized = false;
+    minBtn.onclick = () => {
+      minimized = !minimized;
+      content.style.display = minimized ? "none" : "flex";
+      minBtn.textContent = minimized ? "🔼" : "🔽";
     };
+    window.addEventListener("resize", () => clampElement(container));
+  }
 
-    window.addEventListener("load", createUI);
+  function init() {
+    try { createUI(); }
+    catch (e) { console.error("Lỗi tạo UI:", e); }
+  }
+  if (document.readyState === "loading")
+    document.addEventListener("DOMContentLoaded", init);
+  else init();
 })();
