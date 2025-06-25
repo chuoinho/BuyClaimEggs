@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Auto Buy & Claim Egg
 // @namespace    http://tampermonkey.net/
-// @version      1.3.1
+// @version      1.3
 // @description  Tự động mua mèo, claim trứng to, claim mèo Ninja, hiện log các kiểu rất chuyên nghiệp.
 // @author       Boo
 // @match        *://*.cryptokitties.dapperlabs.com/*
@@ -24,17 +24,9 @@
     isBigEggAutoActive: false
   };
 
-  // ------ OPTIMIZED GLOBAL VARIABLES ------
+  // ------ GLOBAL VARIABLES ------
   let bigEggAutoInterval = null;
   let fancyClaimed = false;
-  const domCache = new Map();
-  const cacheTimeout = 30000;
-
-  const performanceMonitor = {
-    apiCalls: 0,
-    cacheHits: 0,
-    cacheMisses: 0
-  };
 
   // ------ LOG STATE ------
   const logState = { cat: "", BEA: "" };
@@ -43,7 +35,7 @@
   const refreshLog = () => {
     if (refreshLogTimeout) return;
     refreshLogTimeout = setTimeout(() => {
-      const logElement = getCachedElement("logDisplay");
+      const logElement = document.getElementById("logDisplay");
       if (logElement) {
         const message = config.isRunning ? logState.cat : logState.BEA;
         logElement.textContent = message;
@@ -65,59 +57,12 @@
   };
 
   // ------ UTILS ------
-  const setStyle = (el, styles) => Object.assign(el.style, styles);
   const delay = s => new Promise(resolve => setTimeout(resolve, s * 1000));
   const pad = n => String(n).padStart(2, "0");
-
-  const formatDurationCache = new Map();
   const formatDuration = sec => {
     sec = Math.max(0, Math.ceil(sec));
-
-    if (formatDurationCache.has(sec)) {
-      performanceMonitor.cacheHits++;
-      return formatDurationCache.get(sec);
-    }
-
-    performanceMonitor.cacheMisses++;
-    const result = `${pad(Math.floor(sec / 3600))}:${pad(Math.floor((sec % 3600) / 60))}:${pad(sec % 60)}`;
-    if (formatDurationCache.size > 100) {
-      const firstKey = formatDurationCache.keys().next().value;
-      formatDurationCache.delete(firstKey);
-    }
-    formatDurationCache.set(sec, result);
-    return result;
+    return `${pad(Math.floor(sec / 3600))}:${pad(Math.floor((sec % 3600) / 60))}:${pad(sec % 60)}`;
   };
-
-  // ------ DOM UTILITIES ------
-  function getCachedElement(id) {
-    if (domCache.has(id)) {
-      const element = domCache.get(id);
-      if (document.contains(element)) {
-        performanceMonitor.cacheHits++;
-        return element;
-      } else {
-        domCache.delete(id);
-      }
-    }
-    performanceMonitor.cacheMisses++;
-    const element = document.getElementById(id);
-    if (element) {
-      domCache.set(id, element);
-    }
-    return element;
-  }
-
-  function batchDOMUpdates(updates) {
-    requestAnimationFrame(() => {
-      updates.forEach(update => {
-        try {
-          update();
-        } catch (error) {
-          // Đã gỡ bỏ log debug
-        }
-      });
-    });
-  }
 
   // ------ COMPACT INPUT CREATION ------
   function createCompactInput(label, defaultValue, width = "40px") {
@@ -139,48 +84,18 @@
     return { wrapper, input };
   }
 
-  // ------ API UTILITIES ------
-  let requestQueue = [];
-  let isProcessingQueue = false;
-
-  const processRequestQueue = async () => {
-    if (isProcessingQueue || requestQueue.length === 0) return;
-    isProcessingQueue = true;
-    const request = requestQueue.shift();
-
-    try {
-      const result = await executeGMRequest(request.method, request.url, request.data);
-      request.resolve(result);
-    } catch (error) {
-      request.reject(error);
-    }
-
-    isProcessingQueue = false;
-    if (requestQueue.length > 0) {
-      setTimeout(processRequestQueue, 50);
-    }
-  };
-
-  const gmRequest = (method, url, data = null) => {
-    return new Promise((resolve, reject) => {
-      requestQueue.push({ method, url, data, resolve, reject });
-      processRequestQueue();
-    });
-  };
-
-  const executeGMRequest = (method, url, data = null) => {
-    return new Promise(resolve => {
-      performanceMonitor.apiCalls++;
-      const headers = {
-        Accept: "*/*",
-        "Content-Type": "application/json",
-        "X-ID-Token": config.token,
-        "X-App-Version": new Date().toISOString().replace(/[-:.TZ]/g, "")
-      };
+  // ------ GM_xmlhttpRequest Utility ------
+  const gmRequest = (method, url, data = null) =>
+    new Promise(resolve => {
       GM_xmlhttpRequest({
         method,
         url,
-        headers,
+        headers: {
+          Accept: "*/*",
+          "Content-Type": "application/json",
+          "X-ID-Token": config.token,
+          "X-App-Version": new Date().toISOString().replace(/[-:.TZ]/g, "")
+        },
         data: data ? JSON.stringify(data) : null,
         onload: res => {
           try {
@@ -195,67 +110,20 @@
         }
       });
     });
-  };
 
-  // ------ CACHED API FUNCTIONS ------
-  const apiCacheStore = new Map();
-
-  const getCachedApiResponse = key => {
-    const cached = apiCacheStore.get(key);
-    if (cached && Date.now() - cached.timestamp < cacheTimeout) {
-      performanceMonitor.cacheHits++;
-      return cached.data;
-    }
-    if (cached) {
-      apiCacheStore.delete(key);
-    }
-    performanceMonitor.cacheMisses++;
-    return null;
-  };
-
-  const setCachedApiResponse = (key, data) => {
-    if (apiCacheStore.size > 50) {
-      const firstKey = apiCacheStore.keys().next().value;
-      apiCacheStore.delete(firstKey);
-    }
-    apiCacheStore.set(key, {
-      data,
-      timestamp: Date.now()
-    });
-  };
-
-  const fetchAPI = async (endpoint, body = {}) => {
-    const cacheKey = `${endpoint}_${JSON.stringify(body)}`;
-    const cached = getCachedApiResponse(cacheKey);
-    if (cached) return cached;
-    const result = await gmRequest("POST", `${config.apiBase}/${endpoint}`, body);
-    setCachedApiResponse(cacheKey, result);
-    return result;
-  };
-
-  const fetchGameInfo = async () => {
-    const cached = getCachedApiResponse("gameInfo");
-    if (cached) return cached;
-    const result = await gmRequest("GET", config.apiBase);
-    setCachedApiResponse("gameInfo", result);
-    return result;
-  };
-
-  const timestampCache = new Map();
+  // ------ API FUNCTIONS ------
+  const fetchAPI = (endpoint, body = {}) => gmRequest("POST", `${config.apiBase}/${endpoint}`, body);
+  const fetchGameInfo = () => gmRequest("GET", config.apiBase);
+  
   const getNextPetMs = game => {
     const raw = game?.zen_den?.regenesis_egg_status?.next_pet_timestamp;
     if (!raw) return 0;
-    if (timestampCache.has(raw)) {
-      return timestampCache.get(raw);
-    }
-    let result;
+    
     if (typeof raw === "string" && raw.includes("T")) {
-      result = Date.parse(raw) || 0;
+      return Date.parse(raw) || 0;
     } else {
-      result = Number(raw) < 1e12 ? Number(raw) * 1000 : Number(raw);
+      return Number(raw) < 1e12 ? Number(raw) * 1000 : Number(raw);
     }
-    timestampCache.set(raw, result);
-    return result;
   };
 
   const buyBigEgg = () => gmRequest("POST", `${config.apiBase}/gently-stroke-the-regenesis-egg`);
@@ -263,61 +131,65 @@
   const claimFancyParadeKitty = kittyId =>
     gmRequest("POST", `${config.apiBase}/claim-fancy-parade-kitty`, { fancy_parade_kitty_claim_id: kittyId });
 
-  // ------ SCRIPT EXECUTION ------
-  async function runScript() {
-    config.isRunning = true;
-    updateCatLog("⏳ Bắt đầu...");
-    for (let i = 0; i < config.total; i++) {
-      if (!config.isRunning) {
-        updateCatLog("⏹ Đã dừng");
-        break;
-      }
-      try {
-        const [buyResult, claimResult] = await Promise.all([
-          fetchAPI("buy-fancy-egg", { cat_category: config.buy_cat, quantity: 1 }),
-          delay(config.buyDelay).then(() => fetchAPI("claim-tao"))
-        ]);
-        updateCatLog(`🥚 ${i + 1}/${config.total}`);
-        if (!config.isRunning) {
-          updateCatLog("⏹ Đã dừng");
-          break;
-        }
-        const claimed = claimResult.claim?.zen_claimed || 0;
-        updateCatLog(`✅ ${i + 1}/${config.total} (+${claimed})`);
-        await delay(config.claimDelay);
-      } catch (error) {
-        updateCatLog(`❌ Lỗi ${i + 1}`);
-      }
-    }
-    updateCatLog("🎉 Hoàn thành!");
-    config.isRunning = false;
-  }
-
-  // ------ FANCY PARADE PROCESSING ------
   const claimFancyParadeKitties = async () => {
     try {
       const game = await fetchGameInfo();
       const paradeKitties = game?.zen_den?.claimable_fancy_parade_kitties || [];
       if (paradeKitties.length === 0) return;
-      const batchSize = 3;
-      for (let i = 0; i < paradeKitties.length; i += batchSize) {
-        const batch = paradeKitties.slice(i, i + batchSize);
-        const promises = batch.filter(kitty => kitty?.id).map(kitty => claimFancyParadeKitty(kitty.id));
-        await Promise.all(promises);
-        if (i + batchSize < paradeKitties.length) {
+      
+      for (const kitty of paradeKitties) {
+        if (kitty?.id) {
+          await claimFancyParadeKitty(kitty.id);
           await delay(1);
         }
       }
     } catch (error) {
-      // Lỗi được xử lý im lặng
+      // Xử lý lỗi im lặng
     }
   };
+
+  // ------ SCRIPT EXECUTION (LOGIC TUẦN TỰ) ------
+  async function runScript() {
+    config.isRunning = true;
+    updateCatLog("⏳ Bắt đầu...");
+    
+    for (let i = 0; i < config.total; i++) {
+      if (!config.isRunning) {
+        updateCatLog("⏹ Đã dừng");
+        break;
+      }
+      
+      try {
+        // BƯỚC 1: Mua trứng trước
+        await fetchAPI("buy-fancy-egg", { cat_category: config.buy_cat, quantity: 1 });
+        updateCatLog(`🥚 Đã mua ${i + 1}/${config.total}`);
+        await delay(config.buyDelay);
+        
+        if (!config.isRunning) {
+          updateCatLog("⏹ Đã dừng");
+          break;
+        }
+        
+        // BƯỚC 2: Claim sau
+        const data = await fetchAPI("claim-tao");
+        const claimed = data.claim?.zen_claimed || 0;
+        updateCatLog(`✅ Đã claim ${i + 1}/${config.total}: +${claimed} ZEN`);
+        await delay(config.claimDelay);
+      } catch (error) {
+        updateCatLog(`❌ Lỗi ${i + 1}`);
+      }
+    }
+    
+    updateCatLog("🎉 Hoàn thành!");
+    config.isRunning = false;
+  }
 
   // ------ BIG EGG AUTO CONTROL ------
   function startBigEggAuto() {
     if (bigEggAutoInterval) {
       clearInterval(bigEggAutoInterval);
     }
+    
     bigEggAutoInterval = setInterval(async () => {
       try {
         const game = await fetchGameInfo();
@@ -325,8 +197,10 @@
           if (!config.isRunning) updateBEALog("⚠️ Lỗi API");
           return;
         }
+        
         const nextMs = getNextPetMs(game);
         const diffSec = (nextMs - Date.now()) / 1000;
+        
         if (diffSec > 0) {
           if (diffSec <= 600 && !fancyClaimed) {
             await claimFancyParadeKitties();
@@ -338,10 +212,9 @@
           }
         } else {
           if (!config.isRunning) updateBEALog("🥚 Claiming...");
-          await Promise.all([
-            buyBigEgg(),
-            delay(1).then(() => claimZenModeTaoAPI())
-          ]);
+          await buyBigEgg();
+          await delay(1);
+          await claimZenModeTaoAPI();
           fancyClaimed = false;
         }
       } catch (e) {
@@ -569,8 +442,8 @@
       inputRow.className = "compact-input-row";
 
       const input1 = createCompactInput("SL", config.total, "30px");
-      const input2 = createCompactInput("⌛claim:", config.buyDelay, "30px");
-      const input3 = createCompactInput("⌛mua:", config.claimDelay, "30px");
+      const input2 = createCompactInput("⌛mua:", config.buyDelay, "30px");
+      const input3 = createCompactInput("⌛claim:", config.claimDelay, "30px");
 
       inputRow.append(input1.wrapper, input2.wrapper, input3.wrapper);
 
@@ -616,24 +489,21 @@
         refreshTimeout = setTimeout(() => refreshTimeout = null, 2000);
         updateCatLog("Refreshing...");
         try {
-          apiCacheStore.delete("gameInfo");
           const newGameInfo = await fetchGameInfo();
           let newCats = (newGameInfo?.zen_den?.egg_shop || []).map(e => e.cat_category);
           newCats = [...new Set(newCats)];
           if (!newCats.length) {
             return updateCatLog("Refresh failed");
           }
-          batchDOMUpdates([
-            () => {
-              select.innerHTML = "";
-              newCats.forEach(cat => {
-                const opt = document.createElement("option");
-                opt.value = cat;
-                opt.textContent = cat.charAt(0).toUpperCase() + cat.slice(1);
-                select.appendChild(opt);
-              });
-            }
-          ]);
+          
+          select.innerHTML = "";
+          newCats.forEach(cat => {
+            const opt = document.createElement("option");
+            opt.value = cat;
+            opt.textContent = cat.charAt(0).toUpperCase() + cat.slice(1);
+            select.appendChild(opt);
+          });
+          
           config.buy_cat = newCats[0];
           updateCatLog("Refreshed");
         } catch (error) {
@@ -678,12 +548,8 @@
       let minimized = false;
       minBtn.onclick = () => {
         minimized = !minimized;
-        batchDOMUpdates([
-          () => {
-            content.style.display = minimized ? "none" : "flex";
-            minBtn.textContent = minimized ? "⌃" : "⌄";
-          }
-        ]);
+        content.style.display = minimized ? "none" : "flex";
+        minBtn.textContent = minimized ? "⌃" : "⌄";
       };
 
       // Resize handler
@@ -710,10 +576,6 @@
       clearTimeout(refreshLogTimeout);
       refreshLogTimeout = null;
     }
-    domCache.clear();
-    apiCacheStore.clear();
-    formatDurationCache.clear();
-    timestampCache.clear();
   };
 
   window.addEventListener("beforeunload", cleanup);
@@ -723,6 +585,7 @@
     let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
     const header = element.querySelector(".compact-header");
     header.onmousedown = dragMouseDown;
+    
     function dragMouseDown(e) {
       e = e || window.event;
       e.preventDefault();
@@ -731,6 +594,7 @@
       document.onmouseup = closeDragElement;
       document.onmousemove = elementDrag;
     }
+    
     function elementDrag(e) {
       e = e || window.event;
       e.preventDefault();
@@ -741,6 +605,7 @@
       element.style.top = (element.offsetTop - pos2) + "px";
       element.style.left = (element.offsetLeft - pos1) + "px";
     }
+    
     function closeDragElement() {
       document.onmouseup = null;
       document.onmousemove = null;
