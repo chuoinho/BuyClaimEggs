@@ -114,11 +114,11 @@
   // ------ API FUNCTIONS ------
   const fetchAPI = (endpoint, body = {}) => gmRequest("POST", `${config.apiBase}/${endpoint}`, body);
   const fetchGameInfo = () => gmRequest("GET", config.apiBase);
-  
+
   const getNextPetMs = game => {
     const raw = game?.zen_den?.regenesis_egg_status?.next_pet_timestamp;
     if (!raw) return 0;
-    
+
     if (typeof raw === "string" && raw.includes("T")) {
       return Date.parse(raw) || 0;
     } else {
@@ -136,7 +136,7 @@
       const game = await fetchGameInfo();
       const paradeKitties = game?.zen_den?.claimable_fancy_parade_kitties || [];
       if (paradeKitties.length === 0) return;
-      
+
       for (const kitty of paradeKitties) {
         if (kitty?.id) {
           await claimFancyParadeKitty(kitty.id);
@@ -152,24 +152,24 @@
   async function runScript() {
     config.isRunning = true;
     updateCatLog("⏳ Bắt đầu...");
-    
+
     for (let i = 0; i < config.total; i++) {
       if (!config.isRunning) {
         updateCatLog("⏹ Đã dừng");
         break;
       }
-      
+
       try {
         // BƯỚC 1: Mua trứng trước
         await fetchAPI("buy-fancy-egg", { cat_category: config.buy_cat, quantity: 1 });
         updateCatLog(`🥚 Đã mua ${i + 1}/${config.total}`);
         await delay(config.buyDelay);
-        
+
         if (!config.isRunning) {
           updateCatLog("⏹ Đã dừng");
           break;
         }
-        
+
         // BƯỚC 2: Claim sau
         const data = await fetchAPI("claim-tao");
         const claimed = data.claim?.zen_claimed || 0;
@@ -179,7 +179,7 @@
         updateCatLog(`❌ Lỗi ${i + 1}`);
       }
     }
-    
+
     updateCatLog("🎉 Hoàn thành!");
     config.isRunning = false;
   }
@@ -189,7 +189,7 @@
     if (bigEggAutoInterval) {
       clearInterval(bigEggAutoInterval);
     }
-    
+
     bigEggAutoInterval = setInterval(async () => {
       try {
         const game = await fetchGameInfo();
@@ -197,10 +197,10 @@
           if (!config.isRunning) updateBEALog("⚠️ Lỗi API");
           return;
         }
-        
+
         const nextMs = getNextPetMs(game);
         const diffSec = (nextMs - Date.now()) / 1000;
-        
+
         if (diffSec > 0) {
           if (diffSec <= 600 && !fancyClaimed) {
             await claimFancyParadeKitties();
@@ -495,7 +495,7 @@
           if (!newCats.length) {
             return updateCatLog("Refresh failed");
           }
-          
+
           select.innerHTML = "";
           newCats.forEach(cat => {
             const opt = document.createElement("option");
@@ -503,7 +503,7 @@
             opt.textContent = cat.charAt(0).toUpperCase() + cat.slice(1);
             select.appendChild(opt);
           });
-          
+
           config.buy_cat = newCats[0];
           updateCatLog("Refreshed");
         } catch (error) {
@@ -585,7 +585,7 @@
     let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
     const header = element.querySelector(".compact-header");
     header.onmousedown = dragMouseDown;
-    
+
     function dragMouseDown(e) {
       e = e || window.event;
       e.preventDefault();
@@ -594,7 +594,7 @@
       document.onmouseup = closeDragElement;
       document.onmousemove = elementDrag;
     }
-    
+
     function elementDrag(e) {
       e = e || window.event;
       e.preventDefault();
@@ -605,7 +605,7 @@
       element.style.top = (element.offsetTop - pos2) + "px";
       element.style.left = (element.offsetLeft - pos1) + "px";
     }
-    
+
     function closeDragElement() {
       document.onmouseup = null;
       document.onmousemove = null;
